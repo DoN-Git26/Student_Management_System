@@ -1,182 +1,127 @@
 # Attendance Management System
 
-An object-oriented Python project for managing students, teachers, classrooms and attendance records. Users have roles (student, teacher, administrator) and each role can perform its own set of actions.
+A command-line application for managing students, teachers, classes and attendance. It is object-oriented, stores its data in JSON, and has a hashed-password login with role-based access (admin, teacher, student).
 
-## Status
+**Problem it solves:** schools track attendance on paper or spreadsheets. This tool lets each role do only what it should: admins manage people and classes, teachers record and review attendance for their own classes, and students enrol and check in.
 
-| Component | State |
-|-----------|-------|
-| Domain models (`User`, `Student`, `Teacher`, `Administrator`, `Classroom`, `Attendance`) | Implemented, in memory |
-| Unit tests (`tests/`) | One test per model |
-| JSON persistence (`storage.py`, `data/records.json`) | Placeholder, not implemented yet |
-| CLI (`main.py`) | Placeholder, not implemented yet |
+## Features
 
-Data currently lives only in memory and is lost when the program exits.
+- Registration, login and logout with salted PBKDF2-SHA256 password hashing
+- Role-based access: **admin**, **teacher**, **student**
+- Classes with one teacher and many students; attendance per student, class and date (Present / Absent / Late)
+- `argparse` subcommands **and** an interactive menu (`python3 main.py menu`)
+- JSON persistence with handling for missing or corrupt files
+- Input validation (emails, dates, statuses, password length, duplicates)
+- Tables rendered with [`rich`](https://pypi.org/project/rich/)
+- Decorators for logging, authentication, role checks and argument validation
+- Unit tests with `pytest`
 
 ## Project structure
 
 ```
 attendance_system/
-├── main.py                    # CLI entry point (placeholder)
-├── attendance_system/         # Core package
-│   ├── __init__.py
-│   ├── user.py                # User superclass
-│   ├── student.py             # Student subclass
-│   ├── teacher.py             # Teacher subclass
-│   ├── administrator.py       # Administrator subclass
-│   ├── classroom.py           # Classroom class
-│   ├── attendance.py          # Attendance class
-│   └── storage.py             # JSON persistence (placeholder)
+├── main.py              # CLI entry point (argparse)
+├── models/              # Class definitions
+│   ├── user.py          # User base class (validation, password hashing)
+│   ├── student.py       # Student(User)
+│   ├── teacher.py       # Teacher(User)
+│   ├── administrator.py # Administrator(User)
+│   ├── classroom.py     # Classroom (Teacher 1-* Students)
+│   └── attendance.py    # Attendance (Student + Classroom + date + status)
 ├── data/
-│   └── records.json           # Persistent storage (placeholder)
-├── tests/
-│   ├── test_user.py
-│   ├── test_student.py
-│   ├── test_teacher.py
-│   ├── test_admin.py
-│   ├── test_classroom.py
-│   └── test_attendance.py
+│   └── records.json     # Persistent storage
+├── utils/               # Helpers
+│   ├── storage.py       # JSON load/save
+│   ├── auth.py          # Register, login, logout, session
+│   ├── decorators.py    # log_action, login_required, role_required, require_args
+│   ├── security.py      # Password hashing
+│   ├── commands.py      # CLI command handlers
+│   └── menu.py          # Interactive menu
+├── tests/               # pytest unit tests
 ├── requirements.txt
 └── README.md
 ```
 
-## Requirements
+## Object model
 
-- Python 3.10 or newer (developed on 3.12)
-- `pytest` for running the tests
+```
+User ── Student, Teacher, Administrator   (inheritance)
+Teacher 1 ──* Classroom 1 ──* Student     (one-to-many)
+Classroom 1 ──* Attendance *── 1 Student
+```
+
+- **Encapsulation:** names, email, date and status are `@property` fields with validators; the password hash is private and only reachable through `set_password` / `check_password`.
+- **Class attributes:** `User.all_users`, `Classroom.all_classes` and `Attendance.all_records` are the in-memory registries; `User.next_id()` generates ids (`S001`, `T001`, `A001`).
+- **`__str__` / `__repr__`** on users and classes for clean output.
+
+## Setup
+
+Requires Python 3.10 or newer.
 
 ```bash
+git clone <repo-url>
+cd attendance_system
 pip install -r requirements.txt
 ```
 
-`requirements.txt` also lists `argparse`, which is part of the Python standard library and does not need installing.
+## Running
 
-## Design
+Show all commands: `python3 main.py --help` (each command also has `--help`).
 
-Each model keeps a class-level registry of every instance created:
+The **first account registered becomes the administrator**. After that, `register` creates students or teachers, and only an admin can create other admins (`add-user`).
 
-| Registry | Holds |
-|----------|-------|
-| `User.all_users` | Every user (students, teachers, administrators) |
-| `Classroom.all_classes` | Every classroom |
-| `Attendance.all_records` | Every attendance record |
+```bash
+python3 main.py register Grace Lee admin@school.com --password secret1
+python3 main.py login admin@school.com --password secret1
+python3 main.py add-user Alice Smith alice@school.com teacher --password secret1
+python3 main.py add-user John Doe john@school.com student --password secret1
+python3 main.py add-class C101 Math alice@school.com
+python3 main.py enroll C101 --student john@school.com
 
-```
-User
-├── Student
-├── Teacher
-└── Administrator
+python3 main.py login john@school.com --password secret1
+python3 main.py mark C101 present                 # date defaults to today
 
-Classroom ── has one Teacher, many Students
-Attendance ── links one Student, one Classroom, a date and a status
-```
-
-### `User` (`user.py`)
-
-Base class. Attributes: `first_name`, `last_name`, `email`, `role`.
-
-| Method | Description |
-|--------|-------------|
-| `get_full_name()` | Returns `"First Last"` |
-| `view_profile()` | Returns a dict with `Name`, `Email`, `Role` |
-| `User.register_user(first, last, email, role)` | Creates a user (class method) |
-| `User.find_user(email)` | Finds a registered user by email, or `None` |
-
-### `Student` (`student.py`)
-
-Extends `User` with role `"student"`, a `student_id` and `enrolled_classes`.
-
-| Method | Description |
-|--------|-------------|
-| `register_for_class(classroom)` | Enrols in a classroom and adds the student to its roster |
-| `mark_attendance(classroom, date, status)` | Creates an attendance record |
-| `view_attendance_history()` | Returns the student's attendance records as dicts |
-
-### `Teacher` (`teacher.py`)
-
-Extends `User` with role `"teacher"`, a `teacher_id` and `assigned_classes`.
-
-| Method | Description |
-|--------|-------------|
-| `view_students(classroom)` | Names of students in a classroom |
-| `view_daily_attendance(classroom, date)` | Attendance records for a class on a date |
-| `view_student_history(student)` | A student's attendance records |
-| `generate_attendance_report(classroom)` | Attendance details for every record in a class |
-
-### `Administrator` (`administrator.py`)
-
-Extends `User` with role `"admin"` and an `admin_id`.
-
-| Method | Description |
-|--------|-------------|
-| `add_student(student)` | Adds a student to the user registry |
-| `update_student(student, **fields)` | Updates student attributes, e.g. `first_name="Johnny"` |
-| `remove_student(student)` | Removes a student from the user registry |
-| `create_class(class_id, class_name, teacher)` | Creates a classroom |
-| `view_all_attendance()` | Returns every attendance record |
-| `generate_report()` | Attendance details for all records |
-
-### `Classroom` (`classroom.py`)
-
-Attributes: `class_id`, `class_name`, `teacher`, `students`.
-
-| Method | Description |
-|--------|-------------|
-| `add_student(student)` / `remove_student(student)` | Manage the roster |
-| `get_student_list()` | Full names of enrolled students |
-
-### `Attendance` (`attendance.py`)
-
-Attributes: `student`, `classroom`, `date`, `status`.
-
-| Method | Description |
-|--------|-------------|
-| `mark_present()` / `mark_absent()` | Set status to `"Present"` / `"Absent"` |
-| `update_status(status)` | Set any status |
-| `get_attendance_details()` | Dict with `Student`, `Class`, `Date`, `Status` |
-| `Attendance.find_record(student, classroom, date)` | Finds a specific record or `None` |
-| `Attendance.get_student_records(student)` | All records for a student, as dicts |
-
-## Usage example
-
-Run from the project root so the `attendance_system` package is importable:
-
-```python
-from attendance_system.administrator import Administrator
-from attendance_system.teacher import Teacher
-from attendance_system.student import Student
-
-admin = Administrator("Grace", "Lee", "grace@example.com", "A001")
-teacher = Teacher("Alice", "Smith", "alice@example.com", "T001")
-student = Student("John", "Doe", "john@example.com", "S001")
-
-math = admin.create_class("C101", "Math", teacher)
-student.register_for_class(math)
-student.mark_attendance(math, "2026-10-18", "Present")
-
-print(teacher.view_students(math))                                  # ['John Doe']
-print(teacher.view_daily_attendance(math, "2026-10-18")[0].status)  # Present
-print(student.view_attendance_history())
-print(admin.generate_report())
+python3 main.py login alice@school.com --password secret1
+python3 main.py mark C101 late --student john@school.com --date 2026-10-19
+python3 main.py report --class-id C101
 ```
 
-## Running the tests
+Omit `--password` to be prompted without echo. Login is stored in `data/session.json` until you run `logout`.
+
+### Commands
+
+| Command | Who | Description |
+|---------|-----|-------------|
+| `register first last email [--password] [--role]` | anyone | Create an account |
+| `login email [--password]` / `logout` / `whoami` | any | Session management |
+| `add-user first last email role [--password]` | admin | Create a user of any role |
+| `list-users` | admin | List users |
+| `update-user email [--first-name] [--last-name] [--new-email]` | admin | Edit a user |
+| `remove-user email` | admin | Remove a student or teacher (and their records) |
+| `add-class id name teacher_email` | admin | Create a class |
+| `list-classes` | any | List classes (teachers see their own) |
+| `class-students id` | teacher, admin | List a class's students |
+| `enroll id [--student email]` | student, admin | Enrol in a class (admins use `--student`) |
+| `mark id status [--date] [--student]` | all | Students mark themselves; teachers (own classes) and admins mark a student |
+| `view-attendance [--class-id] [--date] [--student]` | any | Records you may see |
+| `report [--class-id] [--date] [--student]` | teacher, admin | Records plus per-student totals |
+| `menu` | any | Interactive menu with options for your role |
+
+## Data and persistence
+
+All data is saved to `data/records.json` after every successful command, with users, classrooms and attendance linked by email and class id. A missing file starts empty; an unreadable or inconsistent file is renamed to `records.corrupt` and the app starts empty. Passwords are stored only as salted hashes. Logs go to `data/app.log` when run via `python3 main.py`.
+
+## Tests
 
 ```bash
 python3 -m pytest
 ```
 
-## Known limitations
+Covers models, authentication, storage (including corrupt files) and CLI flows with role checks.
 
-- `main.py`, `storage.py` and `data/records.json` are empty; there is no CLI and no persistence yet.
-- `User.register_user` always returns a plain `User`, even for the `"student"`, `"teacher"` or `"admin"` roles.
-- Registries are class-level lists shared across the whole process, so tests that create users or classes see each other's data. `tests/test_user.py` currently fails when run after other tests because `find_user` returns an earlier user with the same email.
-- `Administrator.add_student` does not check for duplicates, so adding a student who is already registered creates a second entry.
-- There is no authentication or role enforcement; any object can call any method.
-- Attendance status and dates are not validated, and duplicate records for the same student, class and date are allowed.
+## Known issues
 
-## Planned work
-
-- JSON save/load in `storage.py` backed by `data/records.json`
-- An interactive CLI in `main.py`
-- Role-based access control and input validation
+- One session at a time: the login is a single file, shared by every terminal on the machine.
+- The data file is not locked, so two simultaneous commands could overwrite each other.
+- There is no password reset or change, and no way to reassign a class to another teacher.
+- Teachers with classes cannot be removed until their classes are handled, and there is no command to delete a class.
