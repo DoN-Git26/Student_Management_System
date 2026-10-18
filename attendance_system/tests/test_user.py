@@ -1,4 +1,3 @@
-import pytest
 from attendance_system.user import User
 
 def test_register_and_find_user():

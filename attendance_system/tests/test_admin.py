@@ -1,4 +1,3 @@
-import pytest
 from attendance_system.administrator import Administrator
 from attendance_system.student import Student
 from attendance_system.teacher import Teacher
@@ -10,7 +9,7 @@ def test_admin_manage_students_and_classes():
     teacher = Teacher("Alice", "Smith", "alice@example.com", "T001")
 
     admin.add_student(student)
-    assert student in admin.view_all_attendance() or True  # placeholder
+    assert student in Student.all_users
 
     classroom = admin.create_class("C101", "Math", teacher)
     assert classroom in Classroom.all_classes

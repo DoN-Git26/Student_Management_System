@@ -7,7 +7,8 @@ class Administrator(User):
         self.admin_id = admin_id
 
     def add_student(self, student):
-        User.all_users.append(student)
+        if student not in User.all_users:
+            User.all_users.append(student)
 
     def update_student(self, student, **kwargs):
         for key, value in kwargs.items():

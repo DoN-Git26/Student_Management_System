@@ -1,4 +1,3 @@
-import pytest
 from attendance_system.student import Student
 from attendance_system.classroom import Classroom
 from attendance_system.teacher import Teacher
