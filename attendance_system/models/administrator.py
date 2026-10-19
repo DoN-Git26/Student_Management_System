@@ -37,7 +37,7 @@ class Administrator(User):
         if user.role == "teacher" and user.assigned_classes:
             raise ValueError("Reassign or remove this teacher's classes first.")
         if user.role == "student":
-            for classroom in list(user.enrolled_classes):
+            for classroom in user.enrolled_classes:
                 classroom.remove_student(user)
             Attendance.remove_for_student(user)
         User.all_users.remove(user)
