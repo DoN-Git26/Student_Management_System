@@ -50,6 +50,4 @@ class Administrator(User):
         """Return every attendance record."""
         return list(Attendance.all_records)
 
-    def generate_report(self):
-        """Return attendance details for all records."""
-        return [r.get_attendance_details() for r in Attendance.all_records]
+    
