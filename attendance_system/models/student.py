@@ -7,9 +7,6 @@ from models.user import User
 class Student(User):
     """A student who enrols in classes and marks their own attendance."""
 
-    ROLE = "student"
-    PREFIX = "S"
-
     def __init__(self, first_name, last_name, email, student_id=None, password_hash=""):
         self.enrolled_classes = []
         super().__init__(first_name, last_name, email, student_id, password_hash)
