@@ -46,8 +46,6 @@ class Administrator(User):
         """Create a classroom."""
         return Classroom(class_id, class_name, teacher)
 
-    def view_all_attendance(self):
-        """Return every attendance record."""
-        return list(Attendance.all_records)
+ 
 
     
